@@ -5,19 +5,30 @@
  */
 package com.library.scheduler;
 
+import com.library.httpconnmanager.HttpClientPool;
+
 /**
  *
  * @author smallgod
  */
 public class JobsData {
     
-    private String centralServerJsonUrl;
+    private String remoteUrl;
+    private HttpClientPool httpClientPool;
 
-    public String getCentralServerJsonUrl() {
-        return centralServerJsonUrl;
+    public String getRemoteUrl() {
+        return remoteUrl;
     }
 
-    public void setCentralServerJsonUrl(String centralServerJsonUrl) {
-        this.centralServerJsonUrl = centralServerJsonUrl;
+    public void setRemoteUrl(String remoteUrl) {
+        this.remoteUrl = remoteUrl;
+    }
+
+    public HttpClientPool getHttpClientPool() {
+        return httpClientPool;
+    }
+
+    public void setHttpClientPool(HttpClientPool httpClientPool) {
+        this.httpClientPool = httpClientPool;
     }
 }
