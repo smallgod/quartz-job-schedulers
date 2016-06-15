@@ -5,6 +5,8 @@
  */
 package com.library.scheduler;
 
+import com.library.sgsharedinterface.Remote;
+import com.library.sgsharedinterface.SharedAppConfigIF;
 import java.io.Serializable;
 import org.quartz.DateBuilder;
 import org.quartz.Job;
@@ -49,16 +51,21 @@ public final class CustomJobScheduler implements Serializable {
      * and hence exists. If so, the previous will be deleted first before
      * re-scheduling it.
      *
-     * @param triggerName
-     * @param jobName
-     * @param groupName
-     * @param repeatInterval
      * @param jobsData
      * @param jobClass
      * @param jobListener
      * @return the Trigger created for this Job
      */
-    public Trigger scheduleARepeatJob(String triggerName, String jobName, String groupName, int repeatInterval, JobsData jobsData, Class<? extends Job> jobClass, JobListener jobListener) {
+    public Trigger scheduleARepeatJob(JobsData jobsData, Class<? extends Job> jobClass, JobListener jobListener) {
+
+        SharedAppConfigIF sharedAppConfigs = jobsData.getAppConfigs();
+
+        // A repeat Job will not always be an "adFetch Job", so work on logic to change this
+        //and make sure it accepts any kind of Job
+        String triggerName = sharedAppConfigs.getAdFetcherTriggerName();
+        String jobName = sharedAppConfigs.getAdFetcherJobName();
+        String groupName = sharedAppConfigs.getAdFetcherGroupName();
+        int repeatInterval = sharedAppConfigs.getAdFetcherInterval();
 
         Trigger triggerToFire = createRepeatTrigger(triggerName, groupName, repeatInterval);
         JobDetail jobTodo = prepareJob(jobName, groupName, jobsData, jobClass);
@@ -67,9 +74,11 @@ public final class CustomJobScheduler implements Serializable {
         try {
 
             deleteAJob(jobName, groupName);
+
             scheduler.scheduleJob(jobTodo, triggerToFire);
             scheduler.start();
             scheduler.getListenerManager().addJobListener(jobListener);
+
             logger.debug("Job Trigger: " + triggerName + ", successfuly added");
 
         } catch (SchedulerException ex) {

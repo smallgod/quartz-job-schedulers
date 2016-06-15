@@ -6,6 +6,7 @@
 package com.library.scheduler;
 
 import com.library.httpconnmanager.HttpClientPool;
+import com.library.sgsharedinterface.SharedAppConfigIF;
 
 /**
  *
@@ -13,16 +14,8 @@ import com.library.httpconnmanager.HttpClientPool;
  */
 public class JobsData {
     
-    private String remoteUrl;
     private HttpClientPool httpClientPool;
-
-    public String getRemoteUrl() {
-        return remoteUrl;
-    }
-
-    public void setRemoteUrl(String remoteUrl) {
-        this.remoteUrl = remoteUrl;
-    }
+    private SharedAppConfigIF appConfigs;
 
     public HttpClientPool getHttpClientPool() {
         return httpClientPool;
@@ -30,5 +23,13 @@ public class JobsData {
 
     public void setHttpClientPool(HttpClientPool httpClientPool) {
         this.httpClientPool = httpClientPool;
+    }
+
+    public SharedAppConfigIF getAppConfigs() {
+        return appConfigs;
+    }
+
+    public void setAppConfigs(SharedAppConfigIF appConfigs) {
+        this.appConfigs = appConfigs;
     }
 }
