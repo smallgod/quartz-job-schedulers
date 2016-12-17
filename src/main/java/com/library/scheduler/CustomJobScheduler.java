@@ -5,7 +5,8 @@
  */
 package com.library.scheduler;
 
-import com.library.sgsharedinterface.Remote;
+import com.library.configs.JobsConfig;
+import com.library.httpconnmanager.HttpClientPool;
 import com.library.sgsharedinterface.SharedAppConfigIF;
 import java.io.Serializable;
 import org.quartz.DateBuilder;
@@ -24,6 +25,13 @@ import org.quartz.JobListener;
 import org.quartz.JobKey;
 import static org.quartz.JobBuilder.newJob;
 import org.quartz.JobDataMap;
+import static org.quartz.TriggerKey.triggerKey;
+import com.library.sgsharedinterface.RemoteRequest;
+import static org.quartz.JobBuilder.newJob;
+import static org.quartz.TriggerKey.triggerKey;
+import static org.quartz.JobBuilder.newJob;
+import static org.quartz.TriggerKey.triggerKey;
+import static org.quartz.JobBuilder.newJob;
 import static org.quartz.TriggerKey.triggerKey;
 
 /**
@@ -56,12 +64,14 @@ public final class CustomJobScheduler implements Serializable {
      * @param jobListener
      * @return the Trigger created for this Job
      */
-    public Trigger scheduleARepeatJob(JobsData jobsData, Class<? extends Job> jobClass, JobListener jobListener) {
+    public Trigger scheduleARepeatJob(JobsConfig jobsData, Class<? extends Job> jobClass, JobListener jobListener) {
 
         SharedAppConfigIF sharedAppConfigs = jobsData.getAppConfigs();
 
+        // To-Do 
         // A repeat Job will not always be an "adFetch Job", so work on logic to change this
-        //and make sure it accepts any kind of Job
+        // and make sure it accepts any kind of Job
+        
         String triggerName = sharedAppConfigs.getAdFetcherTriggerName();
         String jobName = sharedAppConfigs.getAdFetcherJobName();
         String groupName = sharedAppConfigs.getAdFetcherGroupName();
@@ -234,7 +244,7 @@ public final class CustomJobScheduler implements Serializable {
         return JobKey.jobKey(jobName);
     }
 
-    private JobDetail prepareJob(String jobName, String jobGroupName, JobsData jobsData, Class<? extends Job> jobToExecute) { //add param for jobdatamap if needed
+    private JobDetail prepareJob(String jobName, String jobGroupName, JobsConfig jobsData, Class<? extends Job> jobToExecute) { //add param for jobdatamap if needed
 
         JobKey jobKey = getJobKey(jobName, jobGroupName);
         JobDataMap jobData = createJobDataMap(jobName, jobsData);
@@ -251,7 +261,7 @@ public final class CustomJobScheduler implements Serializable {
         return job;
     }
 
-    private JobDataMap createJobDataMap(String jobName, JobsData data) {
+    private JobDataMap createJobDataMap(String jobName, JobsConfig data) {
 
         JobDataMap dataMap = new JobDataMap();
         dataMap.put(jobName, data);
@@ -334,4 +344,25 @@ public final class CustomJobScheduler implements Serializable {
     public void cancelAllJobs() throws SchedulerException {
         customSharedScheduler.destroyScheduler();
     }
+    
+    
+    protected void scheduleARepeatJob(SharedAppConfigIF sharedAppConfigs, Class<? extends Job> jobClass, JobListener jobListener, HttpClientPool httpClientPool) {
+
+        JobsConfig jobsData = new JobsConfig();
+
+        jobsData.setAppConfigs(sharedAppConfigs);
+        jobsData.setHttpClientPool(httpClientPool);
+
+        //cus.scheduleARepeatJob(jobsData, jobClass, jobListener);
+
+    }
+
+    protected void scheduleAOneTimeJob(String triggerName, String jobName) {
+
+    }
+
+
+
+    
+    
 }
