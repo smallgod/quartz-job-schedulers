@@ -97,6 +97,40 @@ public final class CustomJobScheduler implements Serializable {
         return triggerToFire;
 
     }
+    
+    public Trigger scheduleAOneTimeJob(JobsConfig jobsData, Class<? extends Job> jobClass, JobListener jobListener) {
+
+        SharedAppConfigIF sharedAppConfigs = jobsData.getAppConfigs();
+
+        // To-Do 
+        // A repeat Job will not always be an "adFetch Job", so work on logic to change this
+        // and make sure it accepts any kind of Job
+        
+        String triggerName = sharedAppConfigs.getAdFetcherTriggerName();
+        String jobName = sharedAppConfigs.getAdFetcherJobName();
+        String groupName = sharedAppConfigs.getAdFetcherGroupName();
+
+        Trigger triggerToFire = createNonRepeatTrigger(triggerName, groupName);
+        JobDetail jobTodo = prepareJob(jobName, groupName, jobsData, jobClass);
+
+        //JobKey jobKey = jobTodo.getKey();
+        try {
+
+            deleteAJob(jobName, groupName);
+
+            scheduler.scheduleJob(jobTodo, triggerToFire);
+            scheduler.start();
+            scheduler.getListenerManager().addJobListener(jobListener);
+
+            logger.debug("Job Trigger: " + triggerName + ", successfuly added");
+
+        } catch (SchedulerException ex) {
+            logger.error("Error linking job to trigger and starting scheduler: " + ex.getMessage());
+        }
+        return triggerToFire;
+
+    }
+
 
     /**
      * Pause a given job
@@ -222,6 +256,18 @@ public final class CustomJobScheduler implements Serializable {
 
         return trigger;
     }
+    
+    private SimpleTrigger createNonRepeatTrigger(String triggerName, String groupName) {
+
+        SimpleTrigger trigger = newTrigger()
+                .withIdentity(triggerKey(triggerName, groupName))
+                .startNow()
+                .withSchedule(simpleSchedule()
+                        .withMisfireHandlingInstructionFireNow())
+                .build();
+
+        return trigger;
+    }
 
     /**
      * uses the given jobName and job groupname to retrieve jobkey
@@ -259,6 +305,8 @@ public final class CustomJobScheduler implements Serializable {
                 .build();
 
         return job;
+        
+                                
     }
 
     private JobDataMap createJobDataMap(String jobName, JobsConfig data) {
