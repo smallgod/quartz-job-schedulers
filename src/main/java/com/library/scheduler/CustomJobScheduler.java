@@ -6,31 +6,23 @@
 package com.library.scheduler;
 
 import com.library.configs.JobsConfig;
+import com.library.datamodel.Constants.NamedConstants;
 import com.library.httpconnmanager.HttpClientPool;
-import com.library.sgsharedinterface.SharedAppConfigIF;
+import com.library.utilities.LoggerUtil;
 import java.io.Serializable;
 import org.quartz.DateBuilder;
 import org.quartz.Job;
 import org.quartz.JobDetail;
 import org.quartz.Scheduler;
 import org.quartz.SchedulerException;
-import static org.quartz.SimpleScheduleBuilder.simpleSchedule;
 import org.quartz.SimpleTrigger;
 import org.quartz.Trigger;
-import static org.quartz.TriggerBuilder.newTrigger;
 import org.quartz.TriggerKey;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.quartz.JobListener;
 import org.quartz.JobKey;
-import static org.quartz.JobBuilder.newJob;
 import org.quartz.JobDataMap;
-import static org.quartz.TriggerKey.triggerKey;
-import com.library.sgsharedinterface.RemoteRequest;
-import static org.quartz.JobBuilder.newJob;
-import static org.quartz.TriggerKey.triggerKey;
-import static org.quartz.JobBuilder.newJob;
-import static org.quartz.TriggerKey.triggerKey;
+import static org.quartz.SimpleScheduleBuilder.simpleSchedule;
+import static org.quartz.TriggerBuilder.newTrigger;
 import static org.quartz.JobBuilder.newJob;
 import static org.quartz.TriggerKey.triggerKey;
 
@@ -40,16 +32,19 @@ import static org.quartz.TriggerKey.triggerKey;
  */
 public final class CustomJobScheduler implements Serializable {
 
-    private static final Logger logger = LoggerFactory.getLogger(CustomJobScheduler.class);
+    private static final LoggerUtil logger = new LoggerUtil(CustomJobScheduler.class);
+    private static final long serialVersionUID = 1L;
 
     private final Scheduler scheduler;
     private final CustomSharedScheduler customSharedScheduler;
+    private final HttpClientPool clientPool;
 
-    private static final long serialVersionUID = -6798027257124056867L;
+    public CustomJobScheduler(HttpClientPool clientPool) {
 
-    public CustomJobScheduler() {
         this.customSharedScheduler = CustomSharedScheduler.getInstance();
         this.scheduler = customSharedScheduler.getScheduler();
+
+        this.clientPool = clientPool;
     }
 
     /**
@@ -66,16 +61,10 @@ public final class CustomJobScheduler implements Serializable {
      */
     public Trigger scheduleARepeatJob(JobsConfig jobsData, Class<? extends Job> jobClass, JobListener jobListener) {
 
-        SharedAppConfigIF sharedAppConfigs = jobsData.getAppConfigs();
-
-        // To-Do 
-        // A repeat Job will not always be an "adFetch Job", so work on logic to change this
-        // and make sure it accepts any kind of Job
-        
-        String triggerName = sharedAppConfigs.getAdFetcherTriggerName();
-        String jobName = sharedAppConfigs.getAdFetcherJobName();
-        String groupName = sharedAppConfigs.getAdFetcherGroupName();
-        int repeatInterval = sharedAppConfigs.getAdFetcherInterval();
+        String triggerName = jobsData.getJobTriggerName();
+        String jobName = jobsData.getJobName();
+        String groupName = jobsData.getJobGroupName();
+        int repeatInterval = jobsData.getRepeatInterval();
 
         Trigger triggerToFire = createRepeatTrigger(triggerName, groupName, repeatInterval);
         JobDetail jobTodo = prepareJob(jobName, groupName, jobsData, jobClass);
@@ -97,18 +86,19 @@ public final class CustomJobScheduler implements Serializable {
         return triggerToFire;
 
     }
-    
+
+    /**
+     *
+     * @param jobsData
+     * @param jobClass
+     * @param jobListener
+     * @return
+     */
     public Trigger scheduleAOneTimeJob(JobsConfig jobsData, Class<? extends Job> jobClass, JobListener jobListener) {
 
-        SharedAppConfigIF sharedAppConfigs = jobsData.getAppConfigs();
-
-        // To-Do 
-        // A repeat Job will not always be an "adFetch Job", so work on logic to change this
-        // and make sure it accepts any kind of Job
-        
-        String triggerName = sharedAppConfigs.getAdFetcherTriggerName();
-        String jobName = sharedAppConfigs.getAdFetcherJobName();
-        String groupName = sharedAppConfigs.getAdFetcherGroupName();
+        String triggerName = jobsData.getJobTriggerName();
+        String jobName = jobsData.getJobName();
+        String groupName = jobsData.getJobGroupName();
 
         Trigger triggerToFire = createNonRepeatTrigger(triggerName, groupName);
         JobDetail jobTodo = prepareJob(jobName, groupName, jobsData, jobClass);
@@ -130,7 +120,6 @@ public final class CustomJobScheduler implements Serializable {
         return triggerToFire;
 
     }
-
 
     /**
      * Pause a given job
@@ -256,7 +245,7 @@ public final class CustomJobScheduler implements Serializable {
 
         return trigger;
     }
-    
+
     private SimpleTrigger createNonRepeatTrigger(String triggerName, String groupName) {
 
         SimpleTrigger trigger = newTrigger()
@@ -305,14 +294,15 @@ public final class CustomJobScheduler implements Serializable {
                 .build();
 
         return job;
-        
-                                
+
     }
 
     private JobDataMap createJobDataMap(String jobName, JobsConfig data) {
 
         JobDataMap dataMap = new JobDataMap();
+
         dataMap.put(jobName, data);
+        dataMap.put(NamedConstants.CLIENT_POOL, clientPool);
 
         return dataMap;
     }
@@ -383,8 +373,8 @@ public final class CustomJobScheduler implements Serializable {
     }
 
     /**
-     * Destroy all sheduled jobs, timers, triggers, etc as well as shutdown the
-     * sharedscheduler Call this method when shutting down the
+     * Destroy all scheduled jobs, timers, triggers, etc as well as shutdown the
+     * shared scheduler Call this method when shutting down the
      * application/daemon
      *
      * @throws SchedulerException
@@ -392,25 +382,4 @@ public final class CustomJobScheduler implements Serializable {
     public void cancelAllJobs() throws SchedulerException {
         customSharedScheduler.destroyScheduler();
     }
-    
-    
-    protected void scheduleARepeatJob(SharedAppConfigIF sharedAppConfigs, Class<? extends Job> jobClass, JobListener jobListener, HttpClientPool httpClientPool) {
-
-        JobsConfig jobsData = new JobsConfig();
-
-        jobsData.setAppConfigs(sharedAppConfigs);
-        jobsData.setHttpClientPool(httpClientPool);
-
-        //cus.scheduleARepeatJob(jobsData, jobClass, jobListener);
-
-    }
-
-    protected void scheduleAOneTimeJob(String triggerName, String jobName) {
-
-    }
-
-
-
-    
-    
 }
