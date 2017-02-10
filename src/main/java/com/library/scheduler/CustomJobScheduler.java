@@ -8,6 +8,7 @@ package com.library.scheduler;
 import com.library.configs.JobsConfig;
 import com.library.datamodel.Constants.NamedConstants;
 import com.library.httpconnmanager.HttpClientPool;
+import com.library.dbadapter.DatabaseAdapter;
 import com.library.utilities.LoggerUtil;
 import java.io.Serializable;
 import org.quartz.DateBuilder;
@@ -40,13 +41,20 @@ public final class CustomJobScheduler implements Serializable {
     private final Scheduler scheduler;
     private final CustomSharedScheduler customSharedScheduler;
     private final HttpClientPool clientPool;
+    private final DatabaseAdapter databaseAdapter;
 
     public CustomJobScheduler(HttpClientPool clientPool) {
+
+        this(clientPool, null);
+    }
+
+    public CustomJobScheduler(HttpClientPool clientPool, DatabaseAdapter databaseAdapter) {
 
         this.customSharedScheduler = CustomSharedScheduler.getInstance();
         this.scheduler = customSharedScheduler.getScheduler();
 
         this.clientPool = clientPool;
+        this.databaseAdapter = databaseAdapter;
     }
 
     /**
@@ -305,6 +313,7 @@ public final class CustomJobScheduler implements Serializable {
 
         dataMap.put(jobName, data);
         dataMap.put(NamedConstants.CLIENT_POOL, clientPool);
+        dataMap.put(NamedConstants.DB_ADAPTER, databaseAdapter);
 
         return dataMap;
     }

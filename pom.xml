@@ -78,6 +78,13 @@
         </dependency>-->
         
         <dependency>
+            <groupId>com.sgdbadapter</groupId>
+            <artifactId>sgdbadapter</artifactId>
+            <version>1.0</version>
+            <type>jar</type>
+        </dependency>
+        
+        <dependency>
             <groupId>com.sghttpconnectionmanager</groupId>
             <artifactId>sghttpconnectionmanager</artifactId>
             <version>1.0</version>
