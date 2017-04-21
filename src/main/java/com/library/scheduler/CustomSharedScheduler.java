@@ -5,21 +5,20 @@
  */
 package com.library.scheduler;
 
+import com.library.utilities.LoggerUtil;
 import java.io.Serializable;
 import org.quartz.Scheduler;
 import org.quartz.SchedulerException;
 import org.quartz.SchedulerFactory;
 import org.quartz.impl.StdSchedulerFactory;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  *
  * @author smallgod
  */
-public  final class CustomSharedScheduler implements Serializable {
+public final class CustomSharedScheduler implements Serializable {
 
-    private static final Logger logger = LoggerFactory.getLogger(CustomSharedScheduler.class);
+    private static final LoggerUtil logger = new LoggerUtil(CustomSharedScheduler.class);
 
     private static final long serialVersionUID = -7536502918237471101L;
 
@@ -65,10 +64,11 @@ public  final class CustomSharedScheduler implements Serializable {
     }
 
     /**
-     * Halts the Scheduler's firing of Triggers, and cleans up all resources associated with the Scheduler. Equivalent to shutdown(false).
-     *The scheduler cannot be re-started.
-     * 
-     * @throws SchedulerException 
+     * Halts the Scheduler's firing of Triggers, and cleans up all resources
+     * associated with the Scheduler. Equivalent to shutdown(false). The
+     * scheduler cannot be re-started.
+     *
+     * @throws SchedulerException
      */
     protected void destroyScheduler() throws SchedulerException {
 
