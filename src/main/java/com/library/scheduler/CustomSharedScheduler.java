@@ -5,7 +5,7 @@
  */
 package com.library.scheduler;
 
-import com.library.utilities.LoggerUtil;
+import com.library.sglogger.util.LoggerUtil;
 import java.io.Serializable;
 import org.quartz.Scheduler;
 import org.quartz.SchedulerException;

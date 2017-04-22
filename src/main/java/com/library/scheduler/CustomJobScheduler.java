@@ -9,7 +9,7 @@ import com.library.configs.JobsConfig;
 import com.library.datamodel.Constants.NamedConstants;
 import com.library.httpconnmanager.HttpClientPool;
 import com.library.dbadapter.DatabaseAdapter;
-import com.library.utilities.LoggerUtil;
+import com.library.sglogger.util.LoggerUtil;
 import java.io.Serializable;
 import org.quartz.DateBuilder;
 import org.quartz.Job;

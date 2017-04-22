@@ -5,7 +5,7 @@
  */
 package com.library.scheduler.executortask;
 
-import com.library.utilities.LoggerUtil;
+import com.library.sglogger.util.LoggerUtil;
 
 /**
  *
