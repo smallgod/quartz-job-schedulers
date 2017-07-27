@@ -6,10 +6,13 @@
 package com.library.scheduler;
 
 import com.library.configs.JobsConfig;
+import com.library.customexception.MyCustomException;
+import com.library.datamodel.Constants.ErrorCode;
 import com.library.datamodel.Constants.NamedConstants;
 import com.library.httpconnmanager.HttpClientPool;
 import com.library.dbadapter.DatabaseAdapter;
 import com.library.sglogger.util.LoggerUtil;
+import com.library.utilities.GeneralUtils;
 import java.io.Serializable;
 import org.quartz.DateBuilder;
 import org.quartz.Job;
@@ -26,6 +29,8 @@ import static org.quartz.SimpleScheduleBuilder.simpleSchedule;
 import static org.quartz.TriggerBuilder.newTrigger;
 import static org.quartz.JobBuilder.newJob;
 import static org.quartz.TriggerKey.triggerKey;
+import static org.quartz.JobBuilder.newJob;
+import static org.quartz.TriggerKey.triggerKey;
 
 /**
  *
@@ -40,6 +45,11 @@ public final class CustomJobScheduler implements Serializable {
     private final CustomSharedScheduler customSharedScheduler;
     private final HttpClientPool clientPool;
     private final DatabaseAdapter databaseAdapter;
+
+    public CustomJobScheduler() {
+
+        this(null);
+    }
 
     public CustomJobScheduler(HttpClientPool clientPool) {
 
@@ -81,6 +91,50 @@ public final class CustomJobScheduler implements Serializable {
         try {
 
             deleteAJob(jobName, groupName);
+
+            scheduler.scheduleJob(jobTodo, triggerToFire);
+            scheduler.start();
+            scheduler.getListenerManager().addJobListener(jobListener);
+
+            logger.debug("Job Trigger: " + triggerName + ", successfuly added");
+
+        } catch (SchedulerException ex) {
+            logger.error("Error linking job to trigger and starting scheduler: " + ex.getMessage());
+        }
+        return triggerToFire;
+
+    }
+
+    /**
+     * Schedule a JOB, start the JOB and add a JobListener that monitors for
+     * events like when the job is finally executed. Before this job is
+     * scheduled the method checks to see if this job was previously scheduled
+     * and hence exists. If so, the previous will be deleted first before
+     * re-scheduling it.
+     *
+     * This job also has the ability to interact with another job - the
+     * secondJob
+     *
+     * @param thisJobsData
+     * @param secondJobsData
+     * @param jobClass
+     * @param jobListener
+     * @return the Trigger created for this Job
+     */
+    public Trigger scheduleARepeatJob(JobsConfig thisJobsData, JobsConfig secondJobsData, Class<? extends Job> jobClass, JobListener jobListener) {
+
+        String triggerName = thisJobsData.getJobTriggerName();
+        String thisJobName = thisJobsData.getJobName();
+        String groupName = thisJobsData.getJobGroupName();
+        int repeatInterval = thisJobsData.getRepeatInterval();
+
+        Trigger triggerToFire = createRepeatTrigger(triggerName, groupName, repeatInterval);
+        JobDetail jobTodo = prepareJob(thisJobsData, secondJobsData, groupName, jobClass);
+
+        //JobKey jobKey = jobTodo.getKey();
+        try {
+
+            deleteAJob(thisJobName, groupName);
 
             scheduler.scheduleJob(jobTodo, triggerToFire);
             scheduler.start();
@@ -172,6 +226,13 @@ public final class CustomJobScheduler implements Serializable {
 
     }
 
+    /**
+     * Check if this job is paused or running
+     *
+     * @param triggerName
+     * @return
+     * @throws SchedulerException
+     */
     public boolean isJobTriggerPaused(String triggerName) throws SchedulerException {
 
         TriggerKey triggerKey = TriggerKey.triggerKey(triggerName);
@@ -189,6 +250,18 @@ public final class CustomJobScheduler implements Serializable {
                 isPaused = Boolean.FALSE;
                 break;
 
+            case BLOCKED:
+                break;
+
+            case COMPLETE:
+                break;
+
+            case ERROR:
+                break;
+
+            case NONE:
+                break;
+
             default:
                 throw new SchedulerException("Trigger is neither in PAUSED nor NORMAL state: " + triggerState.toString());
         }
@@ -197,7 +270,7 @@ public final class CustomJobScheduler implements Serializable {
     }
 
     /**
-     * Delete a job using the given jobName and the groupName for this job
+     * Delete a job using the given thisJobName and the groupName for this job
      *
      * @param jobName
      * @param groupName
@@ -267,7 +340,7 @@ public final class CustomJobScheduler implements Serializable {
     }
 
     /**
-     * uses the given jobName and job groupname to retrieve jobkey
+     * uses the given thisJobName and job groupname to retrieve jobkey
      *
      * @param jobName
      * @param groupName
@@ -278,7 +351,7 @@ public final class CustomJobScheduler implements Serializable {
     }
 
     /**
-     * Uses the given jobName and default job groupname to retrieve jobkey
+     * Uses the given thisJobName and default job groupname to retrieve jobkey
      *
      * @param jobName
      * @return jobkey
@@ -305,11 +378,60 @@ public final class CustomJobScheduler implements Serializable {
 
     }
 
+    /**
+     * Used by this job that might need to interact with another job
+     *
+     * @param thisJobName
+     * @param thisJobData
+     * @param secondJobName
+     * @param secondJobData
+     * @param thisJobGroupName
+     * @param jobToExecute
+     * @return
+     */
+    private JobDetail prepareJob(JobsConfig thisJobData, JobsConfig secondJobData, String thisJobGroupName, Class<? extends Job> jobToExecute) { //add param for jobdatamap if needed
+
+        JobKey jobKey = getJobKey(thisJobData.getJobName(), thisJobGroupName);
+        JobDataMap jobData = createJobDataMap(thisJobData, secondJobData);
+
+        JobDetail job = newJob(jobToExecute)
+                .withIdentity(jobKey)
+                .setJobData(jobData)
+                //.usingJobData("jobSays", "Hello World!")
+                //.usingJobData("myFloatValue", 3.141f)
+                .storeDurably(Boolean.FALSE) //deleted automatically when there are no longer active trigger associated to it
+                .requestRecovery()
+                .build();
+
+        return job;
+
+    }
+
     private JobDataMap createJobDataMap(String jobName, JobsConfig data) {
 
         JobDataMap dataMap = new JobDataMap();
 
         dataMap.put(jobName, data);
+        dataMap.put(NamedConstants.CLIENT_POOL, clientPool);
+        dataMap.put(NamedConstants.DB_ADAPTER, databaseAdapter);
+
+        return dataMap;
+    }
+
+    /**
+     *
+     * @param thisJobName
+     * @param thisJobData
+     * @param secondJobName
+     * @param secondJobData
+     * @return
+     */
+    private JobDataMap createJobDataMap(JobsConfig thisJobData, JobsConfig secondJobData) {
+
+        JobDataMap dataMap = new JobDataMap();
+
+        dataMap.put(thisJobData.getJobName(), thisJobData);
+        dataMap.put(NamedConstants.SECOND_JOBSDATA, secondJobData);
         dataMap.put(NamedConstants.CLIENT_POOL, clientPool);
         dataMap.put(NamedConstants.DB_ADAPTER, databaseAdapter);
 
@@ -379,6 +501,73 @@ public final class CustomJobScheduler implements Serializable {
         } catch (SchedulerException ex) {
             logger.error("error trying to unschedule trigger: " + ex.getMessage());
         }
+    }
+
+    /**
+     * Trigger an existing job to fire now
+     *
+     * @param jobName
+     * @param groupName
+     * @return
+     * @throws MyCustomException
+     */
+    public boolean triggerJobNow(String jobName, String groupName) throws MyCustomException {
+
+        JobKey jobKey = getJobKey(jobName, groupName);
+
+        boolean isJobTriggered = Boolean.FALSE;
+
+        try {
+
+            if (scheduler.checkExists(jobKey)) {
+
+                scheduler.triggerJob(jobKey);
+                isJobTriggered = Boolean.TRUE;
+            }
+
+        } catch (SchedulerException ex) {
+            logger.error("Error triggering a job: " + ex.getMessage());
+            String errorDetails = "SchedulerException occurred trying to trigger job: " + ex.toString();
+
+            MyCustomException error = GeneralUtils.getSingleError(ErrorCode.PROCESSING_ERR, NamedConstants.GENERIC_DB_ERR_DESC, errorDetails);
+            throw error;
+        }
+        return isJobTriggered;
+
+    }
+
+    /**
+     * Trigger an existing job to fire now
+     *
+     * @param jobName
+     * @param groupName
+     * @param jobsDataMap
+     * @return
+     * @throws MyCustomException
+     */
+    public boolean triggerJobNow(String jobName, String groupName, JobDataMap jobsDataMap) throws MyCustomException {
+
+        JobKey jobKey = getJobKey(jobName, groupName);
+
+        boolean isJobTriggered = Boolean.FALSE;
+
+        try {
+
+            if (scheduler.checkExists(jobKey)) {
+
+                scheduler.triggerJob(jobKey, jobsDataMap);
+                isJobTriggered = Boolean.TRUE;
+            }
+
+        } catch (SchedulerException ex) {
+            logger.error("Error triggering a job: " + ex.getMessage());
+            String errorDetails = "SchedulerException occurred trying to trigger job: " + ex.toString();
+
+            MyCustomException error = GeneralUtils.getSingleError(ErrorCode.PROCESSING_ERR, NamedConstants.GENERIC_DB_ERR_DESC, errorDetails);
+            throw error;
+        }
+        return isJobTriggered;
+
     }
 
     /**
