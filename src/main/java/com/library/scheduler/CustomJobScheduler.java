@@ -1,8 +1,3 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
 package com.library.scheduler;
 
 import com.library.configs.JobsConfig;
@@ -29,8 +24,6 @@ import static org.quartz.SimpleScheduleBuilder.simpleSchedule;
 import static org.quartz.TriggerBuilder.newTrigger;
 import static org.quartz.JobBuilder.newJob;
 import static org.quartz.TriggerKey.triggerKey;
-import static org.quartz.JobBuilder.newJob;
-import static org.quartz.TriggerKey.triggerKey;
 
 /**
  *
@@ -45,6 +38,7 @@ public final class CustomJobScheduler implements Serializable {
     private final CustomSharedScheduler customSharedScheduler;
     private final HttpClientPool clientPool;
     private final DatabaseAdapter databaseAdapter;
+    //private final CustomHibernate customHibernate;
 
     public CustomJobScheduler() {
 
@@ -407,7 +401,13 @@ public final class CustomJobScheduler implements Serializable {
 
     }
 
-    private JobDataMap createJobDataMap(String jobName, JobsConfig data) {
+    /**
+     *
+     * @param jobName
+     * @param data
+     * @return
+     */
+    public JobDataMap createJobDataMap(String jobName, JobsConfig data) {
 
         JobDataMap dataMap = new JobDataMap();
 
@@ -419,14 +419,13 @@ public final class CustomJobScheduler implements Serializable {
     }
 
     /**
+     * Create a job datamap including 2 separate jobs
      *
-     * @param thisJobName
      * @param thisJobData
-     * @param secondJobName
      * @param secondJobData
      * @return
      */
-    private JobDataMap createJobDataMap(JobsConfig thisJobData, JobsConfig secondJobData) {
+    public JobDataMap createJobDataMap(JobsConfig thisJobData, JobsConfig secondJobData) {
 
         JobDataMap dataMap = new JobDataMap();
 
