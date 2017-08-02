@@ -6,6 +6,7 @@ import com.library.datamodel.Constants.ErrorCode;
 import com.library.datamodel.Constants.NamedConstants;
 import com.library.httpconnmanager.HttpClientPool;
 import com.library.dbadapter.DatabaseAdapter;
+import com.library.hibernate.CustomHibernate;
 import com.library.sglogger.util.LoggerUtil;
 import com.library.utilities.GeneralUtils;
 import java.io.Serializable;
@@ -37,26 +38,24 @@ public final class CustomJobScheduler implements Serializable {
     private final Scheduler scheduler;
     private final CustomSharedScheduler customSharedScheduler;
     private final HttpClientPool clientPool;
-    private final DatabaseAdapter databaseAdapter;
-    //private final CustomHibernate customHibernate;
+    private final DatabaseAdapter externalDbAccess;
+    private final CustomHibernate internalDbAccess;
 
-    public CustomJobScheduler() {
-
-        this(null);
-    }
-
-    public CustomJobScheduler(HttpClientPool clientPool) {
-
-        this(clientPool, null);
-    }
-
-    public CustomJobScheduler(HttpClientPool clientPool, DatabaseAdapter databaseAdapter) {
+    /**
+     *
+     * @param clientPool
+     * @param externalDbAccess
+     * @param internalDbAccess
+     */
+    public CustomJobScheduler(HttpClientPool clientPool, CustomHibernate internalDbAccess, DatabaseAdapter externalDbAccess) {
 
         this.customSharedScheduler = CustomSharedScheduler.getInstance();
         this.scheduler = customSharedScheduler.getScheduler();
 
         this.clientPool = clientPool;
-        this.databaseAdapter = databaseAdapter;
+        this.internalDbAccess = internalDbAccess;
+        this.externalDbAccess = externalDbAccess;
+
     }
 
     /**
@@ -69,9 +68,12 @@ public final class CustomJobScheduler implements Serializable {
      * @param jobsData
      * @param jobClass
      * @param jobListener
+     * @param scheduleDelay Starts the Scheduler's threads that fire Triggers.
+     * When a scheduler is first created it is in "stand-by" mode, and will not
+     * fire triggers for this delay
      * @return the Trigger created for this Job
      */
-    public Trigger scheduleARepeatJob(JobsConfig jobsData, Class<? extends Job> jobClass, JobListener jobListener) {
+    public Trigger scheduleARepeatJob(JobsConfig jobsData, Class<? extends Job> jobClass, JobListener jobListener, int scheduleDelay) {
 
         String triggerName = jobsData.getJobTriggerName();
         String jobName = jobsData.getJobName();
@@ -87,7 +89,7 @@ public final class CustomJobScheduler implements Serializable {
             deleteAJob(jobName, groupName);
 
             scheduler.scheduleJob(jobTodo, triggerToFire);
-            scheduler.start();
+            scheduler.startDelayed(scheduleDelay);
             scheduler.getListenerManager().addJobListener(jobListener);
 
             logger.debug("Job Trigger: " + triggerName + ", successfuly added");
@@ -113,9 +115,12 @@ public final class CustomJobScheduler implements Serializable {
      * @param secondJobsData
      * @param jobClass
      * @param jobListener
+     * @param scheduleDelay Starts the Scheduler's threads that fire Triggers.
+     * When a scheduler is first created it is in "stand-by" mode, and will not
+     * fire triggers for this delay
      * @return the Trigger created for this Job
      */
-    public Trigger scheduleARepeatJob(JobsConfig thisJobsData, JobsConfig secondJobsData, Class<? extends Job> jobClass, JobListener jobListener) {
+    public Trigger scheduleARepeatJob(JobsConfig thisJobsData, JobsConfig secondJobsData, Class<? extends Job> jobClass, JobListener jobListener, int scheduleDelay) {
 
         String triggerName = thisJobsData.getJobTriggerName();
         String thisJobName = thisJobsData.getJobName();
@@ -131,10 +136,55 @@ public final class CustomJobScheduler implements Serializable {
             deleteAJob(thisJobName, groupName);
 
             scheduler.scheduleJob(jobTodo, triggerToFire);
-            scheduler.start();
+            scheduler.startDelayed(scheduleDelay);
             scheduler.getListenerManager().addJobListener(jobListener);
 
-            logger.debug("Job Trigger: " + triggerName + ", successfuly added");
+        } catch (SchedulerException ex) {
+            logger.error("Error linking job to trigger and starting scheduler: " + ex.getMessage());
+        }
+        return triggerToFire;
+
+    }
+    
+    
+    /**
+     * Schedule a JOB, start the JOB and add a JobListener that monitors for
+     * events like when the job is finally executed. Before this job is
+     * scheduled the method checks to see if this job was previously scheduled
+     * and hence exists. If so, the previous will be deleted first before
+     * re-scheduling it.
+     *
+     * This job also has the ability to interact with 2 other jobs - the
+     * secondJob & thirdJob
+     *
+     * @param thisJobsData
+     * @param secondJobsData
+     * @param thirdJobsData
+     * @param jobClass
+     * @param jobListener
+     * @param scheduleDelay Starts the Scheduler's threads that fire Triggers.
+     * When a scheduler is first created it is in "stand-by" mode, and will not
+     * fire triggers for this delay
+     * @return the Trigger created for this Job
+     */
+    public Trigger scheduleARepeatJob(JobsConfig thisJobsData, JobsConfig secondJobsData, JobsConfig thirdJobsData,Class<? extends Job> jobClass, JobListener jobListener, int scheduleDelay) {
+
+        String triggerName = thisJobsData.getJobTriggerName();
+        String thisJobName = thisJobsData.getJobName();
+        String groupName = thisJobsData.getJobGroupName();
+        int repeatInterval = thisJobsData.getRepeatInterval();
+
+        Trigger triggerToFire = createRepeatTrigger(triggerName, groupName, repeatInterval);
+        JobDetail jobTodo = prepareJob(thisJobsData, secondJobsData, thirdJobsData, groupName, jobClass);
+
+        //JobKey jobKey = jobTodo.getKey();
+        try {
+
+            deleteAJob(thisJobName, groupName);
+
+            scheduler.scheduleJob(jobTodo, triggerToFire);
+            scheduler.startDelayed(scheduleDelay);
+            scheduler.getListenerManager().addJobListener(jobListener);
 
         } catch (SchedulerException ex) {
             logger.error("Error linking job to trigger and starting scheduler: " + ex.getMessage());
@@ -148,9 +198,10 @@ public final class CustomJobScheduler implements Serializable {
      * @param jobsData
      * @param jobClass
      * @param jobListener
+     * @param scheduleDelay
      * @return
      */
-    public Trigger scheduleAOneTimeJob(JobsConfig jobsData, Class<? extends Job> jobClass, JobListener jobListener) {
+    public Trigger scheduleAOneTimeJob(JobsConfig jobsData, Class<? extends Job> jobClass, JobListener jobListener, int scheduleDelay) {
 
         String triggerName = jobsData.getJobTriggerName();
         String jobName = jobsData.getJobName();
@@ -165,7 +216,7 @@ public final class CustomJobScheduler implements Serializable {
             deleteAJob(jobName, groupName);
 
             scheduler.scheduleJob(jobTodo, triggerToFire);
-            scheduler.start();
+            scheduler.startDelayed(scheduleDelay);
             scheduler.getListenerManager().addJobListener(jobListener);
 
             logger.debug("Job Trigger: " + triggerName + ", successfuly added");
@@ -310,12 +361,12 @@ public final class CustomJobScheduler implements Serializable {
         SimpleTrigger trigger = newTrigger()
                 .withIdentity(triggerKey(triggerName, groupName))
                 //.startNow()
+                //.startAt(futureDate(5, TimeUnit.SECONDS))
                 .startAt(DateBuilder.futureDate(repeatInterval, DateBuilder.IntervalUnit.SECOND))
                 .withSchedule(simpleSchedule()
                         .withMisfireHandlingInstructionNextWithRemainingCount()
                         .withIntervalInSeconds(repeatInterval)
                         .repeatForever())
-                //.startAt(futureDate(5, TimeUnit.SECONDS))
                 .build();
 
         return trigger;
@@ -400,8 +451,39 @@ public final class CustomJobScheduler implements Serializable {
         return job;
 
     }
+    
+    
+        /**
+     * Used by this job that might need to interact with another job
+     *
+     * @param thisJobName
+     * @param thisJobData
+     * @param secondJobName
+     * @param secondJobData
+     * @param thisJobGroupName
+     * @param jobToExecute
+     * @return
+     */
+    private JobDetail prepareJob(JobsConfig thisJobData, JobsConfig secondJobData, JobsConfig thirdJobData, String thisJobGroupName, Class<? extends Job> jobToExecute) { //add param for jobdatamap if needed
+
+        JobKey jobKey = getJobKey(thisJobData.getJobName(), thisJobGroupName);
+        JobDataMap jobData = createJobDataMap(thisJobData, secondJobData, thirdJobData);
+
+        JobDetail job = newJob(jobToExecute)
+                .withIdentity(jobKey)
+                .setJobData(jobData)
+                //.usingJobData("jobSays", "Hello World!")
+                //.usingJobData("myFloatValue", 3.141f)
+                .storeDurably(Boolean.FALSE) //deleted automatically when there are no longer active trigger associated to it
+                .requestRecovery()
+                .build();
+
+        return job;
+
+    }
 
     /**
+     * Create a job datamap including 1 job
      *
      * @param jobName
      * @param data
@@ -413,7 +495,8 @@ public final class CustomJobScheduler implements Serializable {
 
         dataMap.put(jobName, data);
         dataMap.put(NamedConstants.CLIENT_POOL, clientPool);
-        dataMap.put(NamedConstants.DB_ADAPTER, databaseAdapter);
+        dataMap.put(NamedConstants.INTERNAL_DB_ACCESS, internalDbAccess);
+        dataMap.put(NamedConstants.EXTERNAL_DB_ACCESS, externalDbAccess);
 
         return dataMap;
     }
@@ -432,7 +515,30 @@ public final class CustomJobScheduler implements Serializable {
         dataMap.put(thisJobData.getJobName(), thisJobData);
         dataMap.put(NamedConstants.SECOND_JOBSDATA, secondJobData);
         dataMap.put(NamedConstants.CLIENT_POOL, clientPool);
-        dataMap.put(NamedConstants.DB_ADAPTER, databaseAdapter);
+        dataMap.put(NamedConstants.INTERNAL_DB_ACCESS, internalDbAccess);
+        dataMap.put(NamedConstants.EXTERNAL_DB_ACCESS, externalDbAccess);
+
+        return dataMap;
+    }
+
+    /**
+     * Create a job datamap including 3 separate jobs
+     *
+     * @param thisJobData
+     * @param secondJobData
+     * @param thirdJobData
+     * @return
+     */
+    public JobDataMap createJobDataMap(JobsConfig thisJobData, JobsConfig secondJobData, JobsConfig thirdJobData) {
+
+        JobDataMap dataMap = new JobDataMap();
+
+        dataMap.put(thisJobData.getJobName(), thisJobData);
+        dataMap.put(NamedConstants.SECOND_JOBSDATA, secondJobData);
+        dataMap.put(NamedConstants.THIRD_JOBSDATA, thirdJobData);
+        dataMap.put(NamedConstants.CLIENT_POOL, clientPool);
+        dataMap.put(NamedConstants.INTERNAL_DB_ACCESS, internalDbAccess);
+        dataMap.put(NamedConstants.EXTERNAL_DB_ACCESS, externalDbAccess);
 
         return dataMap;
     }
